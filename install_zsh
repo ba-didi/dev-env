@@ -1,0 +1,63 @@
+#!/bin/bash
+
+set -e
+
+  if ! sudo -v; then
+    echo "ERROR: This script requires sudo privileges." >&2
+    exit 1
+  fi
+
+
+DEFAULT_PROFILE="/nix/var/nix/profiles/default"
+ZSH_SYMLINK="$DEFAULT_PROFILE/bin/zsh"
+SHELLS_FILE="/etc/shells"
+
+old_zsh_path=""
+
+
+if [ -L "$ZSH_SYMLINK" ]; then
+    old_zsh_path=$(readlink -f "$ZSH_SYMLINK")
+fi
+
+echo "Installing/updating zsh in $DEFAULT_PROFILE..."
+if ! sudo env "PATH=$DEFAULT_PROFILE/bin:$PATH" \
+     nix profile add --profile "$DEFAULT_PROFILE" nixpkgs#zsh; then
+    echo "Error: Nix profile add command failed." >&2
+    exit 1
+fi
+
+if [ ! -L "$ZSH_SYMLINK" ]; then
+    echo "Error: $ZSH_SYMLINK not found after installation." >&2
+    exit 1
+fi
+new_zsh_path=$(readlink -f "$ZSH_SYMLINK")
+echo "New zsh path is: $new_zsh_path"
+
+if [ -n "$old_zsh_path" ] && [ "$old_zsh_path" != "$new_zsh_path" ]; then
+    echo "Removing old zsh path from $SHELLS_FILE..."
+    if sudo grep -Fxq "$old_zsh_path" "$SHELLS_FILE"; then
+        sudo sed -i "\|^$old_zsh_path$|d" "$SHELLS_FILE"
+        echo "Old path removed."
+    else
+        echo "Old path was not in $SHELLS_FILE. No removal needed."
+    fi
+fi
+
+
+if ! grep -Fxq "$new_zsh_path" "$SHELLS_FILE"; then
+    echo "Adding new path $new_zsh_path to $SHELLS_FILE..."
+    # Using sudo tee -a is a robust way to append to a privileged file
+    echo "$new_zsh_path" | sudo tee -a "$SHELLS_FILE" > /dev/null
+    echo "New path added."
+else
+    echo "New path $new_zsh_path is already present in $SHELLS_FILE."
+fi
+
+echo "Setting the new zsh as the default user's shell"
+if chsh -s "$new_zsh_path"; then
+    echo "Successfully updated default shell."
+    echo "The change will take effect the next time you log in."
+else
+    echo "WARNING: Failed to change default shell using 'chsh'. You may need to run 'chsh -s $new_zsh_path' manually."
+    exit 1
+fi
