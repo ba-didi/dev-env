@@ -10,9 +10,6 @@
     eza
     fd
     git
-    git-credential-manager
-    gnupg
-    pass
     delta
     jq
     micro
