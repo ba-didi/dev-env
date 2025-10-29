@@ -17,3 +17,6 @@
 [user]
 	email = yedidya.ep@gmail.com
 	name = ba-didi
+[credential]
+	helper = manager
+	credentialStore = gpg
